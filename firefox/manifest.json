@@ -1,0 +1,25 @@
+{
+	"name": "Slack Sections Cleaner",
+	"version": "1.0.0",
+	"description": "Automatically remove old conversations from your Slack channel sections.",
+	"icons": {
+		"128": "favicon.png"
+	},
+	"manifest_version": 3,
+	"permissions": ["storage"],
+	"action": {
+		"default_popup": "index.html",
+		"default_title": "Slack Sections Cleaner"
+	},
+	"content_scripts": [
+		{
+			"matches": ["https://app.slack.com/*"],
+			"js": ["content.js"]
+		}
+	],
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "{691bd175-a2c1-4e47-9cdd-d394530e1203}"
+		}
+	}
+}
