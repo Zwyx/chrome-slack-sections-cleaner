@@ -1,4 +1,5 @@
 const CONFIG_STORAGE_KEY = "chrome_slack_sections_cleaner_config";
+const HISTORY_STORAGE_KEY = "chrome_slack_sections_cleaner_history";
 const LAST_RUN_TIME_CONFIG_STORAGE_KEY =
 	"chrome_slack_sections_cleaner_last_run_time";
 
@@ -9,6 +10,13 @@ interface Config {
 	sectionNames: string;
 	channelAgeInDays: number;
 }
+
+type Event_ = {
+	date: string;
+	message: string;
+};
+
+type History_ = Event_[];
 
 interface SlackLocalConfig {
 	teams: {
@@ -45,8 +53,19 @@ interface ConversationHistoryResponse extends SlackApiResponse {
 	latest_updates: ConversationLatestUpdates;
 }
 
-function log(msg: string) {
-	console.info(`[Slack Sections Cleaner] ${msg}`);
+let history_: History_ = [];
+
+function log(message: string, recordEvent = false) {
+	console.info(`[Slack Sections Cleaner] ${message}`);
+
+	if (recordEvent) {
+		history_.push({
+			date: new Date().toISOString().replace("T", " ").replace(/\..*/, ""),
+			message,
+		});
+
+		chrome.storage.sync.set({ [HISTORY_STORAGE_KEY]: history_ });
+	}
 }
 
 async function main() {
@@ -57,16 +76,29 @@ async function main() {
 
 	log("Starting...");
 
-	const { [CONFIG_STORAGE_KEY]: rawConfig } = await chrome.storage.sync.get(
-		CONFIG_STORAGE_KEY,
-	);
+	const { [CONFIG_STORAGE_KEY]: rawConfig, [HISTORY_STORAGE_KEY]: rawHistory } =
+		await chrome.storage.sync.get([CONFIG_STORAGE_KEY, HISTORY_STORAGE_KEY]);
 
 	const config: Config = rawConfig;
+	const storedHistory: History_ = rawHistory;
+
+	if (
+		Array.isArray(storedHistory) &&
+		storedHistory.every(
+			(element) =>
+				element &&
+				typeof element === "object" &&
+				typeof element.date === "string" &&
+				typeof element.message === "string",
+		)
+	) {
+		history_ = storedHistory;
+	}
 
 	if (
 		!(
-			config &&
 			typeof config === "object" &&
+			config &&
 			typeof config.teamNames === "string" &&
 			config.teamNames &&
 			typeof config.sectionNames === "string" &&
@@ -75,7 +107,7 @@ async function main() {
 			config.channelAgeInDays
 		)
 	) {
-		log("Invalid extension configuration, exiting.");
+		log("Invalid extension configuration, exiting.", true);
 		return setNextTimeout();
 	}
 
@@ -84,7 +116,7 @@ async function main() {
 	);
 
 	if (!slackLocalConfig.teams) {
-		log("Empty or unrecognised Slack configuration, exiting.");
+		log("Empty or unrecognised Slack configuration, exiting.", true);
 		return setNextTimeout();
 	}
 
@@ -152,7 +184,7 @@ async function main() {
 
 			channelSections = channelSectionsResponse.channel_sections;
 		} catch (err) {
-			log(`Error fetching 'users.channelSections.list': ${err}`);
+			log(`Error fetching 'users.channelSections.list': ${err}`, true);
 			return setNextTimeout();
 		}
 
@@ -195,7 +227,7 @@ async function main() {
 					conversationLatestUpdates =
 						conversationHistoryResponse.latest_updates;
 				} catch (err) {
-					log(`Error fetching 'conversations.history': ${err}`);
+					log(`Error fetching 'conversations.history': ${err}`, true);
 					return setNextTimeout();
 				}
 
@@ -243,9 +275,15 @@ async function main() {
 				} catch (err) {
 					log(
 						`Error fetching 'users.channelSections.channels.bulkUpdate': ${err}`,
+						true,
 					);
 					return setNextTimeout();
 				}
+
+				log(
+					`Removed channel ${channelId} from section ${channelSection.name}.`,
+					true,
+				);
 			}
 		}
 	}

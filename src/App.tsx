@@ -2,12 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import favicon from "/favicon.png";
 
 const CONFIG_STORAGE_KEY = "chrome_slack_sections_cleaner_config";
+const HISTORY_STORAGE_KEY = "chrome_slack_sections_cleaner_history";
 
 interface Config {
 	teamNames: string;
 	sectionNames: string;
 	channelAgeInDays: number;
 }
+
+type Event = {
+	date: string;
+	message: string;
+};
+
+type History = Event[];
 
 const App = () => {
 	const [config, setConfig] = useState<Config>({
@@ -16,25 +24,46 @@ const App = () => {
 		channelAgeInDays: 180,
 	});
 
+	const [history, setHistory] = useState<History>();
+
 	useEffect(() => {
 		chrome.storage.sync
-			.get(CONFIG_STORAGE_KEY)
-			.then(({ [CONFIG_STORAGE_KEY]: rawConfig }) => {
-				const storedConfig: Config = rawConfig;
+			.get([CONFIG_STORAGE_KEY, HISTORY_STORAGE_KEY])
+			.then(
+				({
+					[CONFIG_STORAGE_KEY]: rawConfig,
+					[HISTORY_STORAGE_KEY]: rawHistory,
+				}) => {
+					const storedConfig: Config = rawConfig;
+					const storedHistory: History = rawHistory;
 
-				if (
-					storedConfig &&
-					typeof storedConfig === "object" &&
-					(typeof storedConfig.teamNames === "string" ||
-						storedConfig.teamNames === undefined) &&
-					(typeof storedConfig.sectionNames === "string" ||
-						storedConfig.sectionNames === undefined) &&
-					(typeof storedConfig.channelAgeInDays === "number" ||
-						storedConfig.channelAgeInDays === undefined)
-				) {
-					setConfig(storedConfig);
-				}
-			})
+					if (
+						typeof storedConfig === "object" &&
+						storedConfig &&
+						(typeof storedConfig.teamNames === "string" ||
+							storedConfig.teamNames === undefined) &&
+						(typeof storedConfig.sectionNames === "string" ||
+							storedConfig.sectionNames === undefined) &&
+						(typeof storedConfig.channelAgeInDays === "number" ||
+							storedConfig.channelAgeInDays === undefined)
+					) {
+						setConfig(storedConfig);
+					}
+
+					if (
+						Array.isArray(storedHistory) &&
+						storedHistory.every(
+							(element) =>
+								element &&
+								typeof element === "object" &&
+								typeof element.date === "string" &&
+								typeof element.message === "string",
+						)
+					) {
+						setHistory(storedHistory);
+					}
+				},
+			)
 			.catch(console.error);
 	}, []);
 
@@ -99,6 +128,20 @@ const App = () => {
 					/>
 				</div>
 			</div>
+
+			{history?.length && (
+				<>
+					<div className="border-t border-t-gray-500" />
+
+					<div className="flex flex-col gap-1">
+						{history?.map(({ date, message }) => (
+							<div key={`${date}-${message}`}>
+								[<span className="font-mono">{date}</span>] {message}
+							</div>
+						))}
+					</div>
+				</>
+			)}
 		</div>
 	);
 };
